@@ -1,29 +1,39 @@
-name: SonarCloud
+name: SonarCloud Analysis
+
 on:
   push:
     branches:
       - master
   pull_request:
     types: [opened, synchronize, reopened]
+
 jobs:
   build:
     name: Build and analyze
     runs-on: windows-latest
+
     steps:
+      # Paso 1: Configurar JDK 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: 17
-          distribution: 'zulu' # Alternative distribution options are available.
+          distribution: 'zulu'  # Puedes cambiar esto si prefieres otra distribución
+
+      # Paso 2: Clonar el repositorio
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0  # Clona todo el historial para análisis más relevantes
+
+      # Paso 3: Cache de paquetes de SonarCloud
       - name: Cache SonarCloud packages
         uses: actions/cache@v4
         with:
           path: ~\sonar\cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
+      # Paso 4: Cache del escáner de SonarCloud
       - name: Cache SonarCloud scanner
         id: cache-sonar-scanner
         uses: actions/cache@v4
@@ -31,18 +41,27 @@ jobs:
           path: .\.sonar\scanner
           key: ${{ runner.os }}-sonar-scanner
           restore-keys: ${{ runner.os }}-sonar-scanner
+
+      # Paso 5: Instalar el escáner de SonarCloud si no está en cache
       - name: Install SonarCloud scanner
         if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
         shell: powershell
         run: |
-          New-Item -Path .\.sonar\scanner -ItemType Directory
+          New-Item -Path .\.sonar\scanner -ItemType Directory -Force
           dotnet tool update dotnet-sonarscanner --tool-path .\.sonar\scanner
+
+      # Paso 6: Compilar y analizar
       - name: Build and analyze
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Token para información de PR
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         shell: powershell
         run: |
+          # Iniciar análisis de SonarCloud
           .\.sonar\scanner\dotnet-sonarscanner begin /k:"melgarvic_proyecto_taxi" /o:"melgarvic" /d:sonar.token="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io"
-          dotnet build
+
+          # Aquí puedes especificar la configuración y plataforma correcta
+          dotnet build -c Debug -p:Platform="Any CPU" # Asegúrate de usar la configuración correcta para tu proyecto
+
+          # Finalizar el análisis de SonarCloud
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
